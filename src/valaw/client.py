@@ -107,6 +107,23 @@ class Client:
 
         self.raw_data = raw_data
 
+    async def _make_request(self, url: str, header: Dict, session: aiohttp.ClientSession):
+        async with session.get(url, headers=header) as resp:
+            raw_response = await verify_content(response=resp)
+            if resp.status != 200:
+                raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
+            else:
+                return raw_response
+            
+    async def _build_headers(self) -> Dict[str, str]:
+        return {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Origin": "https://developer.riotgames.com",
+            "X-Riot-Token": self.token
+        }
+            
     ##################
     ### ACCOUNT-V1 ###
     ##################
@@ -127,24 +144,13 @@ class Client:
         else:
             cluster = self.cluster 
 
+        url = f"https://{cluster}.api.riotgames.com/riot/account/v1/accounts/by-puuid/{puuid}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{cluster}.api.riotgames.com/riot/account/v1/accounts/by-puuid/{puuid}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                
-                # Checking if the response is an error, then returning the appropriate object/exception
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(AccountDto, raw_response)
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(AccountDto, raw_response)
             
     async def GET_getByRiotId(self, gameName: str, tagLine: str, cluster: str = None) -> Union[AccountDto, Dict]:
         """Get account by Riot ID.
@@ -162,24 +168,15 @@ class Client:
             if cluster.lower() not in clusters:
                 raise Exceptions.InvalidCluster(f"Invalid cluster, valid clusters are: {clusters}.")
         else:
-            cluster = self.cluster 
+            cluster = self.cluster
 
+        url = f"https://{cluster}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{cluster}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(AccountDto, raw_response)
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(AccountDto, raw_response)
             
     async def GET_getByAccessToken(self, authorization: str, cluster: str = None) -> Union[AccountDto, Dict]:
         """Get account by access token.
@@ -197,23 +194,14 @@ class Client:
         else:
             cluster = self.cluster 
 
-        async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token,
-                "Authorization": authorization
-            }
-            async with session.get(f"https://{cluster}.api.riotgames.com/riot/account/v1/accounts/me", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(AccountDto, raw_response)
+        url = f"https://{cluster}.api.riotgames.com/riot/account/v1/accounts/me"
+        async with aiohttp.ClientSession() as session: 
+            headers = await self._build_headers()
+            headers["Authorization"] = authorization
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(AccountDto, raw_response)
             
     async def GET_getActiveShard(self, puuid: str, cluster: str = None) -> Union[ActiveShardDto, Dict]:
         """Get active shard for a player.
@@ -231,26 +219,18 @@ class Client:
         else:
             cluster = self.cluster 
 
+        url = f"https://{cluster}.api.riotgames.com/riot/account/v1/active-shards/by-game/val/by-puuid/{puuid}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{cluster}.api.riotgames.com/riot/account/v1/active-shards/by-game/val/by-puuid/{puuid}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(ActiveShardDto, raw_response)
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(ActiveShardDto, raw_response)
 
-    ######################
+
+    #####################
     ### VAL-CONTENT-V1 ###
-    ######################
+    #####################
 
     async def GET_getContent(self, region: str, locale: str = "") -> Union[ContentDto, Dict]:
         """Get content optionally filtered by locale. A locale is recommended to be used for faster response times.
@@ -265,36 +245,28 @@ class Client:
         if region.lower() not in regions:
             raise Exceptions.InvalidRegion(f"Invalid region, valid regions are: {regions}.")
 
-        if locale != None:
+        if locale != "":
             if locale.lower() not in locales:
                 raise Exceptions.InvalidLocale(f"Invalid locale, valid locales are: {locales}.")
             locale = f"?locale={locale}"
 
+        url = f"https://{region}.api.riotgames.com/val/content/v1/contents{locale}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{region}.api.riotgames.com/val/content/v1/contents{locale}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(ContentDto, raw_response)
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(ContentDto, raw_response)
+
 
     ####################
     ### VAL-MATCH-V1 ###
-    #################### 
+    ####################
 
     async def GET_getMatch(self, matchId: str, region: str) -> Union[MatchDto, Dict]:
-        """Get match by id.
+        """Get match by ID.
         
-        :param matchId: The match id.
+        :param matchId: The match ID.
         :type matchId: :class:`str`
         :param region: The region to execute against.
         :type region: :class:`str`
@@ -304,25 +276,17 @@ class Client:
         if region.lower() not in regions:
             raise Exceptions.InvalidRegion(f"Invalid region, valid regions are: {regions}.")
 
+        url = f"https://{region}.api.riotgames.com/val/match/v1/matches/{matchId}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{region}.api.riotgames.com/val/match/v1/matches/{matchId}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(MatchDto, raw_response)
-            
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(MatchDto, raw_response)
+
+
     async def GET_getMatchlist(self, puuid: str, region: str) -> Union[MatchlistDto, Dict]:
-        """Get matchlist for games played by puuid.
+        """Get matchlist for games played by a PUUID.
         
         :param puuid: The PUUID of the account.
         :type puuid: :class:`str`
@@ -334,35 +298,18 @@ class Client:
         if region.lower() not in regions:
             raise Exceptions.InvalidRegion(f"Invalid region, valid regions are: {regions}.")
 
+        url = f"https://{region}.api.riotgames.com/val/match/v1/matchlists/by-puuid/{puuid}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{region}.api.riotgames.com/val/match/v1/matchlists/by-puuid/{puuid}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(MatchlistDto, raw_response)
-            
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(MatchlistDto, raw_response)
+
+
     async def GET_getRecent(self, queue: str, region: str) -> Union[RecentMatchesDto, Dict]:
         """Get recent matches.
-
-        Returns a list of match ids that have completed 
-        in the last 10 minutes for live regions and 12 hours 
-        for the esports routing value. NA/LATAM/BR share a 
-        match history deployment. As such, recent matches 
-        will return a combined list of matches from those 
-        three regions. Requests are load balanced so you may 
-        see some inconsistencies as matches are added/removed 
-        from the list.
-
+        
         :param queue: The queue to retrieve recent matches for.
         :type queue: :class:`str`
         :param region: The region to execute against.
@@ -375,23 +322,15 @@ class Client:
         if queue.lower() not in queues:
             raise Exceptions.InvalidQueue(f"Invalid queue, valid queues are: {queues}.")
 
+        url = f"https://{region}.api.riotgames.com/val/match/v1/recent-matches/by-queue/{queue}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{region}.api.riotgames.com/val/match/v1/recent-matches/by-queue/{queue}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(RecentMatchesDto, raw_response)
-    
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(RecentMatchesDto, raw_response)
+
+
     #####################
     ### VAL-RANKED-V1 ###
     #####################
@@ -399,11 +338,11 @@ class Client:
     async def GET_getLeaderboard(self, actId: str, region: str, size: int = 200, startIndex: int = 0) -> Union[LeaderboardDto, Dict]:
         """Get leaderboard for the competitive queue.
         
-        :param actId: The act id.
+        :param actId: The act ID.
         :type actId: :class:`str`
         :param region: The region to execute against.
         :type region: :class:`str`
-        :param size: The amount of entries to retrieve, defaults to 200.
+        :param size: The number of entries to retrieve, defaults to 200.
         :type size: :class:`int`
         :param startIndex: The index to start from, defaults to 0.
         :type startIndex: :class:`int`
@@ -412,26 +351,18 @@ class Client:
 
         if region.lower() not in regions:
             raise Exceptions.InvalidRegion(f"Invalid region, valid regions are: {regions}.")
-        
+
         if size > 200 or size < 1:
-            raise ValueError(f"Invalid size, valid values: 1 to 200.")
-        
+            raise ValueError(f"Invalid size, valid values are: 1 to 200.")
+
+        url = f"https://{region}.api.riotgames.com/val/ranked/v1/leaderboards/by-act/{actId}?size={size}&startIndex={startIndex}"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{region}.api.riotgames.com/val/ranked/v1/leaderboards/by-act/{actId}?size={size}&startIndex={startIndex}", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(LeaderboardDto, raw_response)
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(LeaderboardDto, raw_response)
+
 
     #####################
     ### VAL-STATUS-V1 ###
@@ -448,22 +379,14 @@ class Client:
         if region.lower() not in regions:
             raise Exceptions.InvalidRegion(f"Invalid region, valid regions are: {regions}.")
 
+        url = f"https://{region}.api.riotgames.com/val/status/v1/platform-data"
         async with aiohttp.ClientSession() as session:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Charset": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": "https://developer.riotgames.com",
-                "X-Riot-Token": self.token
-            }
-            async with session.get(f"https://{region}.api.riotgames.com/val/status/v1/platform-data", headers=headers) as resp:
-                raw_response = await verify_content(response=resp)
-                if self.raw_data == True:
-                    return raw_response
-                if raw_response.get("status") != None:
-                    raise Exceptions.RiotAPIResponseError(raw_response["status"]["status_code"], raw_response["status"]["message"])
-                else:
-                    return fromdict(PlatformDataDto, raw_response)
+            headers = await self._build_headers()
+            raw_response = await self._make_request(url=url, header=headers, session=session)
+            if self.raw_data:
+                return raw_response
+            return fromdict(PlatformDataDto, raw_response)
+
 
     ###########
     ### RSO ###
